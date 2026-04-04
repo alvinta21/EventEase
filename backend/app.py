@@ -6,7 +6,7 @@ from routes.tickets import tickets
 from database.db import create_tables
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173"])
+CORS(app, origins=["http://localhost:5173", "https://frontend-production-d09f.up.railway.app"])
 
 create_tables()
 
