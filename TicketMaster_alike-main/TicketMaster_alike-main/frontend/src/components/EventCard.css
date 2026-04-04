@@ -1,0 +1,29 @@
+.event-card {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 20px;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.event-card h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 2rem;
+  color: #ffffff;
+}
+
+.event-card p {
+  margin: 8px 0;
+  color: #d1d5db;
+  font-size: 1.05rem;
+}
+
+.event-link {
+  display: inline-block;
+  margin-top: 14px;
+  text-decoration: none;
+  font-weight: 600;
+}
