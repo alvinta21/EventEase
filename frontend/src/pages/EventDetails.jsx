@@ -8,6 +8,7 @@ export default function EventDetails() {
   const user = JSON.parse(localStorage.getItem("user"));
   const [event, setEvent] = useState(null);
   const [tickets, setTickets] = useState([]);
+  const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -32,6 +33,14 @@ export default function EventDetails() {
   const availableTickets = tickets.filter(
     (ticket) => ticket.status === "available"
   );
+
+  useEffect(() => {
+    if (availableTickets.length === 0) {
+      setQuantity(1);
+    } else if (quantity > availableTickets.length) {
+      setQuantity(availableTickets.length);
+    }
+  }, [availableTickets.length, quantity]);
 
   if (error) {
     return (
@@ -80,18 +89,53 @@ export default function EventDetails() {
           )}
 
           {user?.role === "user" && availableTickets.length > 0 && (
-            <Link
-              className="event-link"
-              to="/checkout"
-              state={{
-                tickets: availableTickets,
-                eventTitle: event.title,
-                eventLocation: event.location,
-                eventDate: event.date,
-              }}
-            >
-              Go to Checkout
-            </Link>
+            <>
+              <div style={{ marginTop: "16px", marginBottom: "16px" }}>
+                <label htmlFor="quantity"><strong>Quantity:</strong></label>
+                <input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  max={availableTickets.length}
+                  value={quantity}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    if (!value) {
+                      setQuantity(1);
+                      return;
+                    }
+                    if (value < 1) {
+                      setQuantity(1);
+                    } else if (value > availableTickets.length) {
+                      setQuantity(availableTickets.length);
+                    } else {
+                      setQuantity(value);
+                    }
+                  }}
+                  style={{
+                    display: "block",
+                    marginTop: "8px",
+                    padding: "10px",
+                    width: "100px"
+                  }}
+                />
+              </div>
+
+              <Link
+                className="event-link"
+                to="/checkout"
+                state={{
+                  eventId: event.id,
+                  quantity,
+                  eventTitle: event.title,
+                  eventLocation: event.location,
+                  eventDate: event.date,
+                  ticketsRemaining: availableTickets.length,
+                }}
+              >
+                Go to Checkout
+              </Link>
+            </>
           )}
 
           {user?.role === "user" && availableTickets.length === 0 && (

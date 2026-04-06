@@ -187,15 +187,15 @@ def update_event(event_id):
     current_total = cursor.fetchone()[0]
 
     cursor.execute(
-        "SELECT COUNT(*) FROM tickets WHERE event_id = ? AND status = 'reserved'",
+        "SELECT COUNT(*) FROM tickets WHERE event_id = ? AND status = 'confirmed'",
         (event_id,)
     )
-    reserved_count = cursor.fetchone()[0]
+    confirmed_count = cursor.fetchone()[0]
 
-    if new_total < reserved_count:
+    if new_total < confirmed_count:
         conn.close()
         return jsonify({
-            "error": f"Cannot reduce tickets below {reserved_count} because some tickets are already reserved"
+            "error": f"Cannot reduce tickets below {confirmed_count} because some tickets are already booked"
         }), 400
 
     if new_total > current_total:

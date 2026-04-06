@@ -33,7 +33,7 @@ export default function MyTickets() {
         {error && <p>{error}</p>}
 
         {tickets.length === 0 ? (
-          <p style={{ textAlign: "center" }}>No tickets reserved yet.</p>
+          <p style={{ textAlign: "center" }}>No bookings confirmed yet.</p>
         ) : (
           tickets.map((ticket) => (
             <div className="event-card" key={ticket.id}>
@@ -44,7 +44,10 @@ export default function MyTickets() {
               <p><strong>Date:</strong> {ticket.event_date}</p>
               <p><strong>Location:</strong> {ticket.event_location}</p>
               <p><strong>Ticket Reference:</strong> {ticket.ticket_reference}</p>
-              <p><strong>Status:</strong> {ticket.status}</p>
+              <p>
+                <strong>Status:</strong>{" "}
+                {ticket.status === "confirmed" ? "Booked" : ticket.status}
+              </p>
             </div>
           ))
         )}
