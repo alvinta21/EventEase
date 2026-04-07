@@ -4,6 +4,17 @@ from database.db import get_db_connection
 tickets = Blueprint("tickets", __name__)
 
 
+def build_full_name(title, first_name, middle_names, last_name, organisation_name):
+    if organisation_name:
+        return organisation_name
+
+    parts = [title, first_name]
+    if middle_names:
+        parts.append(middle_names)
+    parts.append(last_name)
+    return " ".join(part for part in parts if part)
+
+
 @tickets.route("/events/<int:event_id>/tickets", methods=["GET"])
 def get_event_tickets(event_id):
     conn = get_db_connection()
@@ -14,12 +25,14 @@ def get_event_tickets(event_id):
 
     ticket_data = []
     for t in tickets_list:
-      ticket_data.append({
-          "id": t[0],
-          "event_id": t[1],
-          "user_id": t[2],
-          "status": t[3]
-      })
+        ticket_data.append({
+            "id": t[0],
+            "event_id": t[1],
+            "user_id": t[2],
+            "status": t[3],
+            "ticket_type": t[4],
+            "booking_id": t[5]
+        })
 
     return jsonify(ticket_data)
 
@@ -29,7 +42,8 @@ def confirm_booking(event_id):
     data = request.get_json()
 
     user_id = data.get("user_id")
-    quantity = data.get("quantity")
+    adult_quantity = data.get("adult_quantity", 0)
+    child_quantity = data.get("child_quantity", 0)
     card_name = data.get("card_name", "").strip()
     card_number = data.get("card_number", "").replace(" ", "")
     expiry = data.get("expiry", "").strip()
@@ -38,16 +52,19 @@ def confirm_booking(event_id):
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    if quantity is None:
-        return jsonify({"error": "Missing quantity"}), 400
-
     try:
-        quantity = int(quantity)
+        adult_quantity = int(adult_quantity)
+        child_quantity = int(child_quantity)
     except (TypeError, ValueError):
-        return jsonify({"error": "Quantity must be a valid number"}), 400
+        return jsonify({"error": "Ticket quantities must be valid numbers"}), 400
 
-    if quantity < 1:
-        return jsonify({"error": "Quantity must be at least 1"}), 400
+    if adult_quantity < 0 or child_quantity < 0:
+        return jsonify({"error": "Ticket quantities cannot be negative"}), 400
+
+    total_quantity = adult_quantity + child_quantity
+
+    if total_quantity < 1:
+        return jsonify({"error": "Select at least 1 ticket"}), 400
 
     if not card_name or not card_number or not expiry or not cvv:
         return jsonify({"error": "All checkout fields are required"}), 400
@@ -79,34 +96,78 @@ def confirm_booking(event_id):
         return jsonify({"error": "Only ticket buyers can confirm bookings"}), 403
 
     cursor.execute(
+        """
+        SELECT adult_price, child_price
+        FROM events
+        WHERE id = ?
+        """,
+        (event_id,)
+    )
+    event_prices = cursor.fetchone()
+
+    if not event_prices:
+        conn.close()
+        return jsonify({"error": "Event not found"}), 404
+
+    adult_price = float(event_prices[0])
+    child_price = float(event_prices[1])
+
+    cursor.execute(
         "SELECT id FROM tickets WHERE event_id = ? AND status = 'available' LIMIT ?",
-        (event_id, quantity)
+        (event_id, total_quantity)
     )
     available_tickets = cursor.fetchall()
 
-    if len(available_tickets) < quantity:
+    if len(available_tickets) < total_quantity:
         conn.close()
         return jsonify({"error": "Not enough tickets available"}), 400
 
-    booked_ticket_ids = []
+    total_cost = (adult_quantity * adult_price) + (child_quantity * child_price)
 
-    for ticket in available_tickets:
-        ticket_id = ticket[0]
+    cursor.execute(
+        """
+        INSERT INTO bookings (event_id, user_id, adult_quantity, child_quantity, total_cost)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (event_id, user_id, adult_quantity, child_quantity, total_cost)
+    )
+    booking_id = cursor.lastrowid
+
+    ticket_ids = [ticket[0] for ticket in available_tickets]
+
+    adult_ticket_ids = ticket_ids[:adult_quantity]
+    child_ticket_ids = ticket_ids[adult_quantity:]
+
+    for ticket_id in adult_ticket_ids:
         cursor.execute(
-            "UPDATE tickets SET status = 'confirmed', user_id = ? WHERE id = ?",
-            (user_id, ticket_id)
+            """
+            UPDATE tickets
+            SET status = 'confirmed', user_id = ?, ticket_type = ?, booking_id = ?
+            WHERE id = ?
+            """,
+            (user_id, "adult", booking_id, ticket_id)
         )
-        booked_ticket_ids.append(ticket_id)
+
+    for ticket_id in child_ticket_ids:
+        cursor.execute(
+            """
+            UPDATE tickets
+            SET status = 'confirmed', user_id = ?, ticket_type = ?, booking_id = ?
+            WHERE id = ?
+            """,
+            (user_id, "child", booking_id, ticket_id)
+        )
 
     conn.commit()
     conn.close()
 
-    ticket_references = [f"EE-TKT-{ticket_id:05d}" for ticket_id in booked_ticket_ids]
-
     return jsonify({
         "message": "Booking confirmed successfully",
-        "quantity_confirmed": quantity,
-        "ticket_references": ticket_references
+        "booking_reference": f"EE-BKG-{booking_id:05d}",
+        "adult_quantity": adult_quantity,
+        "child_quantity": child_quantity,
+        "total_tickets": total_quantity,
+        "total_cost": round(total_cost, 2)
     }), 200
 
 
@@ -118,37 +179,51 @@ def get_user_tickets(user_id):
     cursor.execute(
         """
         SELECT
-            tickets.id,
-            tickets.event_id,
-            tickets.user_id,
-            tickets.status,
-            users.username,
+            bookings.id,
+            bookings.event_id,
+            bookings.user_id,
+            bookings.adult_quantity,
+            bookings.child_quantity,
+            bookings.total_cost,
+            bookings.created_at,
+            users.title,
+            users.first_name,
+            users.middle_names,
+            users.last_name,
+            users.organisation_name,
             events.title,
             events.date,
             events.location
-        FROM tickets
-        JOIN users ON tickets.user_id = users.id
-        JOIN events ON tickets.event_id = events.id
-        WHERE tickets.user_id = ?
+        FROM bookings
+        JOIN users ON bookings.user_id = users.id
+        JOIN events ON bookings.event_id = events.id
+        WHERE bookings.user_id = ?
+        ORDER BY bookings.id DESC
         """,
         (user_id,)
     )
 
-    tickets_list = cursor.fetchall()
+    bookings_list = cursor.fetchall()
     conn.close()
 
-    ticket_data = []
-    for t in tickets_list:
-        ticket_data.append({
-            "id": t[0],
-            "event_id": t[1],
-            "user_id": t[2],
-            "status": t[3],
-            "username": t[4],
-            "event_title": t[5],
-            "event_date": t[6],
-            "event_location": t[7],
-            "ticket_reference": f"EE-TKT-{t[0]:05d}"
+    booking_data = []
+    for b in bookings_list:
+        full_name = build_full_name(b[7], b[8], b[9], b[10], b[11])
+
+        booking_data.append({
+            "booking_id": b[0],
+            "event_id": b[1],
+            "user_id": b[2],
+            "adult_quantity": b[3],
+            "child_quantity": b[4],
+            "total_tickets": b[3] + b[4],
+            "total_cost": round(float(b[5]), 2),
+            "created_at": b[6],
+            "full_name": full_name,
+            "event_title": b[12],
+            "event_date": b[13],
+            "event_location": b[14],
+            "booking_reference": f"EE-BKG-{b[0]:05d}"
         })
 
-    return jsonify(ticket_data), 200
+    return jsonify(booking_data), 200

@@ -123,6 +123,36 @@
   color: #d1d5db;
 }
 
+.price-input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.price-prefix {
+  padding: 12px 14px;
+  color: #d1d5db;
+  background: #111827;
+  border-right: 1px solid #374151;
+  font-size: 1rem;
+}
+
+.price-input-wrapper input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  padding: 12px;
+}
+
+.price-input-wrapper input:focus {
+  outline: none;
+  border: none;
+}
+
 @media (max-width: 850px) {
   .dashboard-grid {
     grid-template-columns: 1fr;

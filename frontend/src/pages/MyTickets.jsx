@@ -4,7 +4,7 @@ import api from "../services/api";
 
 export default function MyTickets() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const [tickets, setTickets] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -15,13 +15,24 @@ export default function MyTickets() {
 
     api.get(`/users/${user.id}/tickets`)
       .then((res) => {
-        setTickets(res.data || []);
+        setBookings(res.data || []);
       })
       .catch((err) => {
         console.error(err);
         setError("Failed to load tickets.");
       });
   }, [user]);
+
+  const cardStyle = {
+    background: "#111827",
+    border: "1px solid #374151",
+    borderRadius: "16px",
+    padding: "24px",
+    boxShadow: "0 6px 20px rgba(0, 0, 0, 0.22)",
+    maxWidth: "1100px",
+    margin: "0 auto 20px auto",
+    textAlign: "center",
+  };
 
   return (
     <>
@@ -32,22 +43,23 @@ export default function MyTickets() {
 
         {error && <p>{error}</p>}
 
-        {tickets.length === 0 ? (
+        {bookings.length === 0 ? (
           <p style={{ textAlign: "center" }}>No bookings confirmed yet.</p>
         ) : (
-          tickets.map((ticket) => (
-            <div className="event-card" key={ticket.id}>
+          bookings.map((booking) => (
+            <div style={cardStyle} key={booking.booking_id}>
               <p>
-                <strong>{ticket.username.toUpperCase()}</strong>
+                <strong>{booking.full_name.toUpperCase()}</strong>
               </p>
-              <p><strong>Event:</strong> {ticket.event_title}</p>
-              <p><strong>Date:</strong> {ticket.event_date}</p>
-              <p><strong>Location:</strong> {ticket.event_location}</p>
-              <p><strong>Ticket Reference:</strong> {ticket.ticket_reference}</p>
-              <p>
-                <strong>Status:</strong>{" "}
-                {ticket.status === "confirmed" ? "Booked" : ticket.status}
-              </p>
+              <p><strong>Event:</strong> {booking.event_title}</p>
+              <p><strong>Date:</strong> {booking.event_date}</p>
+              <p><strong>Location:</strong> {booking.event_location}</p>
+              <p><strong>Booking Reference:</strong> {booking.booking_reference}</p>
+              <p><strong>Adult Tickets:</strong> {booking.adult_quantity}</p>
+              <p><strong>Child Tickets:</strong> {booking.child_quantity}</p>
+              <p><strong>Total Tickets:</strong> {booking.total_tickets}</p>
+              <p><strong>Total Cost:</strong> £{Number(booking.total_cost).toFixed(2)}</p>
+              <p><strong>Status:</strong> Booked</p>
             </div>
           ))
         )}

@@ -22,7 +22,10 @@ export default function Login() {
     e.preventDefault();
 
     try {
-      const res = await api.post("/login", formData);
+      const res = await api.post("/login", {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password.trim(),
+      });
 
       localStorage.setItem("user", JSON.stringify(res.data.user));
 

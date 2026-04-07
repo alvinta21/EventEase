@@ -13,6 +13,8 @@ export default function Dashboard() {
     location: "",
     date: "",
     available_tickets: "",
+    adult_price: "",
+    child_price: "",
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -27,7 +29,7 @@ export default function Dashboard() {
     }
 
     loadEvents();
-  }, [user, navigate]);
+  }, [navigate]);
 
   const loadEvents = async () => {
     try {
@@ -40,22 +42,50 @@ export default function Dashboard() {
   };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    let cleanedValue = value;
+
+    if (name === "available_tickets") {
+      cleanedValue = value.replace(/\D/g, "");
+    }
+
+    if (name === "adult_price" || name === "child_price") {
+      if (!/^\d*\.?\d{0,2}$/.test(value)) {
+        return;
+      }
+      cleanedValue = value;
+    }
+
     setFormData({
       ...formData,
-      [e.target.name]:
-        e.target.name === "available_tickets"
-          ? e.target.value.replace(/\D/g, "")
-          : e.target.value,
+      [name]: cleanedValue,
     });
   };
 
+  const handlePriceBlur = (fieldName) => {
+    const value = formData[fieldName];
+
+    if (!value) return;
+
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) {
+      setFormData((prev) => ({
+        ...prev,
+        [fieldName]: parsed.toFixed(2),
+      }));
+    }
+  };
+
   const handleEdit = (event) => {
-    setEditingId(event[0]);
+    setEditingId(event.id);
     setFormData({
-      title: event[1],
-      location: event[2],
-      date: event[3],
-      available_tickets: event[4],
+      title: event.title,
+      location: event.location,
+      date: event.date,
+      available_tickets: String(event.available_tickets),
+      adult_price: Number(event.adult_price).toFixed(2),
+      child_price: Number(event.child_price).toFixed(2),
     });
     setMessage("");
     setError("");
@@ -80,6 +110,8 @@ export default function Dashboard() {
           location: "",
           date: "",
           available_tickets: "",
+          adult_price: "",
+          child_price: "",
         });
       }
 
@@ -97,6 +129,8 @@ export default function Dashboard() {
       location: "",
       date: "",
       available_tickets: "",
+      adult_price: "",
+      child_price: "",
     });
     setMessage("");
     setError("");
@@ -111,7 +145,9 @@ export default function Dashboard() {
       !formData.title ||
       !formData.location ||
       !formData.date ||
-      !formData.available_tickets
+      !formData.available_tickets ||
+      !formData.adult_price ||
+      !formData.child_price
     ) {
       setError("Please fill in all fields.");
       return;
@@ -120,22 +156,20 @@ export default function Dashboard() {
     try {
       let res;
 
+      const payload = {
+        title: formData.title,
+        location: formData.location,
+        date: formData.date,
+        available_tickets: Number(formData.available_tickets),
+        adult_price: Number(formData.adult_price),
+        child_price: Number(formData.child_price),
+        creator_id: user.id,
+      };
+
       if (editingId) {
-        res = await api.put(`/events/${editingId}`, {
-          title: formData.title,
-          location: formData.location,
-          date: formData.date,
-          available_tickets: Number(formData.available_tickets),
-          creator_id: user.id,
-        });
+        res = await api.put(`/events/${editingId}`, payload);
       } else {
-        res = await api.post("/events", {
-          title: formData.title,
-          location: formData.location,
-          date: formData.date,
-          available_tickets: Number(formData.available_tickets),
-          creator_id: user.id,
-        });
+        res = await api.post("/events", payload);
       }
 
       setMessage(
@@ -148,6 +182,8 @@ export default function Dashboard() {
         location: "",
         date: "",
         available_tickets: "",
+        adult_price: "",
+        child_price: "",
       });
 
       setEditingId(null);
@@ -157,6 +193,25 @@ export default function Dashboard() {
       setError(err.response?.data?.error || "Failed to save event.");
     }
   };
+
+  const displayName =
+    user?.organisation_name ||
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
+    "Creator";
+
+  const totalEvents = events.length;
+  const totalTicketsRemaining = events.reduce(
+    (sum, event) => sum + Number(event.tickets_remaining || 0),
+    0
+  );
+  const totalTicketsSold = events.reduce(
+    (sum, event) => sum + Number(event.sold_tickets || 0),
+    0
+  );
+  const totalRevenue = events.reduce(
+    (sum, event) => sum + Number(event.revenue_generated || 0),
+    0
+  );
 
   if (!user || user.role !== "creator") {
     return null;
@@ -170,7 +225,7 @@ export default function Dashboard() {
         <div className="dashboard-header">
           <h1 className="page-title">Creator Dashboard</h1>
           <p className="dashboard-subtitle">
-            Welcome, {user.username}. Create and manage your events here.
+            Welcome, {displayName}. Create and manage your events here.
           </p>
         </div>
 
@@ -211,6 +266,30 @@ export default function Dashboard() {
                 min="1"
               />
 
+              <div className="price-input-wrapper">
+                <span className="price-prefix">£</span>
+                <input
+                  type="text"
+                  name="adult_price"
+                  placeholder="Adult ticket price"
+                  value={formData.adult_price}
+                  onChange={handleChange}
+                  onBlur={() => handlePriceBlur("adult_price")}
+                />
+              </div>
+
+              <div className="price-input-wrapper">
+                <span className="price-prefix">£</span>
+                <input
+                  type="text"
+                  name="child_price"
+                  placeholder="Child ticket price"
+                  value={formData.child_price}
+                  onChange={handleChange}
+                  onBlur={() => handlePriceBlur("child_price")}
+                />
+              </div>
+
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <button type="submit">
                   {editingId ? "Update Event" : "Create Event"}
@@ -233,15 +312,23 @@ export default function Dashboard() {
 
             <div className="dashboard-stats">
               <div className="stat-card">
-                <span className="stat-number">{events.length}</span>
+                <span className="stat-number">{totalEvents}</span>
                 <span className="stat-label">Total Events</span>
               </div>
 
               <div className="stat-card">
-                <span className="stat-number">
-                  {events.reduce((sum, event) => sum + Number(event[4] || 0), 0)}
-                </span>
-                <span className="stat-label">Total Tickets</span>
+                <span className="stat-number">{totalTicketsRemaining}</span>
+                <span className="stat-label">Tickets Remaining</span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-number">{totalTicketsSold}</span>
+                <span className="stat-label">Tickets Sold</span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-number">£{totalRevenue.toFixed(2)}</span>
+                <span className="stat-label">Revenue Generated</span>
               </div>
             </div>
           </div>
@@ -255,21 +342,33 @@ export default function Dashboard() {
           ) : (
             <div className="dashboard-events-grid">
               {events.map((event) => (
-                <div className="dashboard-event-card" key={event[0]}>
-                  <h3>{event[1]}</h3>
+                <div className="dashboard-event-card" key={event.id}>
+                  <h3>{event.title}</h3>
                   <p>
-                    <strong>Location:</strong> {event[2]}
+                    <strong>Location:</strong> {event.location}
                   </p>
                   <p>
-                    <strong>Date:</strong> {event[3]}
+                    <strong>Date:</strong> {event.date}
                   </p>
                   <p>
-                    <strong>Available Tickets:</strong> {event[4]}
+                    <strong>Adult Price:</strong> £{Number(event.adult_price).toFixed(2)}
+                  </p>
+                  <p>
+                    <strong>Child Price:</strong> £{Number(event.child_price).toFixed(2)}
+                  </p>
+                  <p>
+                    <strong>Tickets Remaining:</strong> {event.tickets_remaining}
+                  </p>
+                  <p>
+                    <strong>Tickets Sold:</strong> {event.sold_tickets}
+                  </p>
+                  <p>
+                    <strong>Revenue:</strong> £{Number(event.revenue_generated).toFixed(2)}
                   </p>
 
                   <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
                     <button onClick={() => handleEdit(event)}>Edit</button>
-                    <button onClick={() => handleDelete(event[0])}>Delete</button>
+                    <button onClick={() => handleDelete(event.id)}>Delete</button>
                   </div>
                 </div>
               ))}
